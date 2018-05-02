@@ -1,0 +1,36 @@
+#配置要忽略的文件,这些文件不会提交到GitHub上
+*.class
+
+#package file
+*.war
+*.ear
+
+#kdiff3
+*.orig
+
+#maven ignore
+target/
+
+#eclipse ignore
+.settings/
+.project
+.classpath
+
+#idea ignore
+.idea/
+/idea/
+*.ipr
+*.iml
+*.iws
+out/
+
+# temp file
+*.log
+*.cache
+*.diff
+*.patch
+*.tmp
+
+# system ignore
+.DS_Store
+Thumbs.db
