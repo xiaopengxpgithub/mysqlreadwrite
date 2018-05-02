@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:mvc="http://www.springframework.org/schema/mvc" xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.1.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.1.xsd
+http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.1.xsd
+http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.1.xsd">
+
+    <!-- 加载外部属性文件 -->
+    <context:property-placeholder location="classpath:db.properties" />
+
+    <!-- 配置自动扫描的包,带controller注解的包不扫描 -->
+    <context:component-scan base-package="com.atguigu.mysqlrw">
+        <context:exclude-filter type="annotation"
+                                expression="org.springframework.stereotype.Controller" />
+        <context:exclude-filter type="annotation"
+                                expression="org.springframework.web.bind.annotation.ControllerAdvice" />
+    </context:component-scan>
+
+    <!-- master数据库配置 -->
+    <bean id="dataSourceWrite" class="com.alibaba.druid.pool.DruidDataSource" destroy-method="close">
+        <property name="driverClassName" value="${jdbc.master.driverClassName}" />
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${jdbc.master.jdbcUrl}" />
+        <property name="username" value="${jdbc.master.username}" />
+        <property name="password" value="${jdbc.master.password}" />
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${initSize}" />
+        <property name="minIdle" value="${minIdle}" />
+        <property name="maxActive" value="${maxActive}" />
+        <property name="maxWait" value="${maxWait}"></property>
+    </bean>
+
+    <!-- slave01数据库配置 -->
+    <bean id="dataSourceRead" class="com.alibaba.druid.pool.DruidDataSource" destroy-method="close">
+        <property name="driverClassName" value="${jdbc.slave01.driverClassName}" />
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${jdbc.slave01.jdbcUrl}" />
+        <property name="username" value="${jdbc.slave01.username}" />
+        <property name="password" value="${jdbc.slave01.password}" />
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${initSize}" />
+        <property name="minIdle" value="${minIdle}" />
+        <property name="maxActive" value="${maxActive}" />
+        <property name="maxWait" value="${maxWait}"></property>
+    </bean>
+
+    <!-- 自定义类,数据源动态切换
+         作用:在执行service方法之前,告诉service方法要使用哪个数据源
+     -->
+    <bean id="dynamicDataSource" class="com.atguigu.mysqlrw.dynamicdatasource.CustomDynamicDataSource">
+        <!-- 设置多个数据源 -->
+        <property name="targetDataSources">
+            <map key-type="java.lang.String">
+                <!-- 这个key需要和注解中的value值一致,根据指定的方法返回的字符串决定使用哪个数据源 -->
+                <entry key="write" value-ref="dataSourceWrite"/>
+                <entry key="read" value-ref="dataSourceRead"/>
+            </map>
+        </property>
+        <!-- 设置默认的数据源,如果方法上没有添加注解,那么使用这个默认的数据源 -->
+        <property name="defaultTargetDataSource" ref="dataSourceRead"/>
+    </bean>
+
+    <!-- 配置mybatis的sqlsessionfactory -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!-- mybatis的配置文件 -->
+        <property name="configLocation" value="classpath:mybaties-config.xml"></property>
+        <!-- 数据源 -->
+        <property name="dataSource" ref="dynamicDataSource"></property>
+    </bean>
+
+    <!-- 使用mapper代理代理方式 配置mapper的批量扫描:从mapper的包中扫描出mapper接口,自动创建代理对象并且在spring容器中注册
+        注意:
+            1.在这里配置了mapper扫描的包,在mybatis的配置文件中就不需要在配置加载mapper映射文件的代码了
+            2.保证mapper映射文件和mapper接口的名称一致,且在同一个目录下
+            3.自动扫描出来的mapper的bean的id就是mapper接口的类名(首字母小写)
+            4.如果要扫描多个包,不能用通配符(*),必须要在每个包名之间用逗号(',')隔开 -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <!-- 指定扫描的包名,即mapper接口所在的包 -->
+        <property name="basePackage" value="com.atguigu.mysqlrw.mapper"></property>
+        <!-- 注意:这里不能引用sqlsessionFactory,因为这里会先执行,如果引用了,会造成上面的datasource异常 -->
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"></property>
+    </bean>
+
+    <!--配置事务管理器 -->
+    <bean id="transactionManager"
+          class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dynamicDataSource"></property>
+    </bean>
+
+    <!-- 开启注解事物 -->
+    <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true"/>
+
+    <!-- 开启aop代理,如果有aop相关的类,就需要添加该配置 -->
+    <aop:aspectj-autoproxy></aop:aspectj-autoproxy>
+</beans>
